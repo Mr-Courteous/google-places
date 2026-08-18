@@ -1,0 +1,60 @@
+# ── Secrets ────────────────────────────────────────────────────────────────────
+.env
+*.env
+.env.*
+
+# ── Python bytecode / caches ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ── Virtual environment ────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── Distribution / packaging ───────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+
+# ── Testing & coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.coveragerc
+
+# ── Linting / type checking ────────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+
+# ── Flask / runtime artifacts ──────────────────────────────────────────────────
+instance/
+*.sqlite
+*.db
+
+# ── Jupyter (if ever used) ─────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── OS noise ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor / IDE ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/

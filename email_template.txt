@@ -1,0 +1,19 @@
+SUBJECT: Quick question for {business_name}
+
+Hi {business_name} team,
+
+[Write your pitch here — keep it short, specific to what you offer,
+and relevant to why you're reaching out to this type of business.]
+
+If this isn't useful to you, no worries at all — just reply "no thanks"
+and I won't follow up again.
+
+Best,
+[Your name]
+[Your business name]
+[Your phone / website]
+
+---
+You're receiving this because {business_name} is publicly listed as a
+business in your area. Reply "unsubscribe" and I'll remove you from
+any future outreach.
