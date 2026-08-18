@@ -1,264 +1,460 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gradeet Lead Finder</title>
-<style>
-  :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --border: #2a2e38;
-    --text: #e8e9ec;
-    --muted: #9a9fab;
-    --accent: #4f8cff;
-    --accent-hover: #3d78ea;
-    --warn-bg: #3a2a12;
-    --warn-border: #6b4a1a;
-    --warn-text: #f0b866;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 40px 20px;
-  }
-  .wrap { max-width: 900px; margin: 0 auto; }
-  h1 { font-size: 1.5rem; margin-bottom: 4px; }
-  .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 0.9rem; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Businesses Lead Finder</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #2a2e38;
+      --text: #e8e9ec;
+      --muted: #9a9fab;
+      --accent: #4f8cff;
+      --accent-hover: #3d78ea;
+      --warn-bg: #3a2a12;
+      --warn-border: #6b4a1a;
+      --warn-text: #f0b866;
+    }
 
-  .warning {
-    background: var(--warn-bg);
-    border: 1px solid var(--warn-border);
-    color: var(--warn-text);
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 24px;
-    font-size: 0.88rem;
-    line-height: 1.5;
-  }
-  .warning code {
-    background: rgba(255,255,255,0.08);
-    padding: 1px 5px;
-    border-radius: 4px;
-  }
+    * {
+      box-sizing: border-box;
+    }
 
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
-  }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .field { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 6px; }
-  label { font-size: 0.82rem; color: var(--muted); }
-  input {
-    background: #0f1115;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-size: 0.95rem;
-  }
-  input:focus { outline: none; border-color: var(--accent); }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 20px;
+    }
 
-  button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 11px 20px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:hover { background: var(--accent-hover); }
-  button:disabled { background: #3a3e48; cursor: not-allowed; }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+    }
 
-  .status { margin-top: 12px; font-size: 0.88rem; color: var(--muted); min-height: 20px; }
-  .status.error { color: #f27070; }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 4px;
+    }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-  }
-  th, td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
-  tr:hover td { background: rgba(255,255,255,0.02); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
 
-  .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .download-btn { background: #2a2e38; }
-  .download-btn:hover { background: #343945; }
-  .empty { color: var(--muted); font-size: 0.9rem; padding: 20px 0; text-align: center; }
-  .nav-links { margin-bottom: 20px; font-size: 0.88rem; }
-  .badge {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 20px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    margin-right: 4px;
-  }
-  .badge.valid { background: rgba(76,175,80,0.15); color: #4caf50; }
-  .badge.invalid { background: rgba(242,112,112,0.15); color: #f27070; }
-  .badge.unknown { background: rgba(154,159,171,0.15); color: var(--muted); }
+    .warning {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: var(--warn-text);
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
 
-  .progress-wrap { margin-top: 10px; display: none; }
-  .progress-track {
-    background: #0f1115;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    height: 10px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    background: var(--accent);
-    height: 100%;
-    width: 0%;
-    transition: width 0.3s ease;
-  }
-  .progress-text { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+    .warning code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
 
-  @media (max-width: 700px) {
-    body { padding: 24px 12px; }
-    .wrap { max-width: 100%; }
-    .panel { padding: 18px 14px; }
-    .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    .field { min-width: 0; }
-    .results-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-    .results-header > div { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
-  }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
 
-  @media (max-width: 420px) {
-    body { padding: 16px 10px; }
-    h1 { font-size: 1.3rem; }
-    .subtitle { font-size: 0.8rem; }
-    .warning { padding: 10px 12px; font-size: 0.8rem; }
-    .panel { padding: 14px 12px; }
-    button { width: 100%; }
-    .results-header > div { flex-direction: column; }
-  }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
 
-  @media (max-width: 250px) {
-    body { padding: 12px 8px; }
-    .panel { padding: 12px 10px; }
-    h1 { font-size: 1.1rem; }
-    .warning, .subtitle, .status, label, input, button { font-size: 0.75rem; }
-    input { padding: 9px 8px; }
-    button { padding: 10px 8px; }
-  }
-</style>
+    .field {
+      flex: 1;
+      min-width: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    input {
+      background: #0f1115;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 11px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button:disabled {
+      background: #3a3e48;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      min-height: 20px;
+    }
+
+    .status.error {
+      color: #f27070;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .download-btn {
+      background: #2a2e38;
+    }
+
+    .download-btn:hover {
+      background: #343945;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 20px 0;
+      text-align: center;
+    }
+
+    .nav-links {
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .badge.valid {
+      background: rgba(76, 175, 80, 0.15);
+      color: #4caf50;
+    }
+
+    .badge.invalid {
+      background: rgba(242, 112, 112, 0.15);
+      color: #f27070;
+    }
+
+    .badge.unknown {
+      background: rgba(154, 159, 171, 0.15);
+      color: var(--muted);
+    }
+
+    .progress-wrap {
+      margin-top: 10px;
+      display: none;
+    }
+
+    .progress-track {
+      background: #0f1115;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 10px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      background: var(--accent);
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    @media (max-width: 700px) {
+      body {
+        padding: 24px 12px;
+      }
+
+      .wrap {
+        max-width: 100%;
+      }
+
+      .panel {
+        padding: 18px 14px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .field {
+        min-width: 0;
+      }
+
+      .results-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .results-header>div {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      body {
+        padding: 16px 10px;
+      }
+
+      h1 {
+        font-size: 1.3rem;
+      }
+
+      .subtitle {
+        font-size: 0.8rem;
+      }
+
+      .warning {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+      }
+
+      .panel {
+        padding: 14px 12px;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .results-header>div {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 250px) {
+      body {
+        padding: 12px 8px;
+      }
+
+      .panel {
+        padding: 12px 10px;
+      }
+
+      h1 {
+        font-size: 1.1rem;
+      }
+
+      .warning,
+      .subtitle,
+      .status,
+      label,
+      input,
+      button {
+        font-size: 0.75rem;
+      }
+
+      input {
+        padding: 9px 8px;
+      }
+
+      button {
+        padding: 10px 8px;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div class="wrap">
-  <h1>Gradeet Lead Finder</h1>
-  <div class="subtitle">Pull business names, phone numbers, and websites via the Google Places API.</div>
-  <div class="nav-links"><a href="/verify">→ Verify emails from a saved CSV/PDF</a></div>
+  <div class="wrap">
+    <h1>Businesses Lead Finder</h1>
+    <div class="subtitle">Pull business names, phone numbers, and websites via the Google Places API.</div>
+    <div class="nav-links"><a href="/verify">→ Verify emails from a saved CSV/PDF</a></div>
 
 
-  {% if not key_configured %}
-  <div class="warning">
-    ⚠️ No API key detected. Open the <code>.env</code> file in this project folder and replace
-    <code>your_key_here</code> with your real Google Places API key. Get one at
-    <code>console.cloud.google.com</code> (enable "Places API (New)"), then restart this app.
+    {% if not key_configured %}
+    <div class="warning">
+      ⚠️ No API key detected. Open the <code>.env</code> file in this project folder and replace
+      <code>your_key_here</code> with your real Google Places API key. Get one at
+      <code>console.cloud.google.com</code> (enable "Places API (New)"), then restart this app.
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <div class="row">
+        <div class="field">
+          <label for="keyword">Business type</label>
+          <input id="keyword" type="text" placeholder="e.g. hair salons">
+        </div>
+        <div class="field">
+          <label for="location">City / location</label>
+          <input id="location" type="text" placeholder="e.g. Kano, Nigeria">
+        </div>
+        <div class="field" style="max-width: 120px;">
+          <label for="limit">Max results</label>
+          <input id="limit" type="number" value="20" min="1" max="100">
+        </div>
+      </div>
+      <button id="searchBtn">Search</button>
+      <div class="status" id="status"></div>
+      <div class="progress-wrap" id="searchProgressWrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="searchProgressFill"></div>
+        </div>
+        <div class="progress-text" id="searchProgressText"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="resultsPanel" style="display:none;">
+      <div class="results-header">
+        <strong id="resultCount"></strong>
+        <div style="display:flex; gap:10px; flex-wrap: wrap;">
+          <button class="download-btn" id="scrapeEmailsBtn">Scrape Websites</button>
+          <button class="download-btn" id="verifyEmailsBtn">Verify Emails</button>
+          <button class="download-btn" id="downloadBtn">Download CSV</button>
+          <button class="download-btn" id="downloadPdfBtn">Download PDF</button>
+        </div>
+      </div>
+      <div class="status" id="scrapeStatus"></div>
+      <div class="progress-wrap" id="scrapeProgressWrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="scrapeProgressFill"></div>
+        </div>
+        <div class="progress-text" id="scrapeProgressText"></div>
+      </div>
+      <div class="status" id="verifyStatus"></div>
+      <div class="progress-wrap" id="verifyProgressWrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="verifyProgressFill"></div>
+        </div>
+        <div class="progress-text" id="verifyProgressText"></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Address</th>
+              <th>Website</th>
+              <th>Email(s)</th>
+              <th>Verification</th>
+              <th>Website Phone</th>
+              <th>Rating</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
-  {% endif %}
 
-  <div class="panel">
-    <div class="row">
-      <div class="field">
-        <label for="keyword">Business type</label>
-        <input id="keyword" type="text" placeholder="e.g. hair salons">
-      </div>
-      <div class="field">
-        <label for="location">City / location</label>
-        <input id="location" type="text" placeholder="e.g. Kano, Nigeria">
-      </div>
-      <div class="field" style="max-width: 120px;">
-        <label for="limit">Max results</label>
-        <input id="limit" type="number" value="20" min="1" max="100">
-      </div>
-    </div>
-    <button id="searchBtn">Search</button>
-    <div class="status" id="status"></div>
-    <div class="progress-wrap" id="searchProgressWrap">
-      <div class="progress-track"><div class="progress-fill" id="searchProgressFill"></div></div>
-      <div class="progress-text" id="searchProgressText"></div>
-    </div>
-  </div>
+  <script>
+    const searchBtn = document.getElementById('searchBtn');
+    const statusEl = document.getElementById('status');
+    const resultsPanel = document.getElementById('resultsPanel');
+    const resultsBody = document.getElementById('resultsBody');
+    const resultCount = document.getElementById('resultCount');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const searchProgressWrap = document.getElementById('searchProgressWrap');
+    const searchProgressFill = document.getElementById('searchProgressFill');
+    const searchProgressText = document.getElementById('searchProgressText');
 
-  <div class="panel" id="resultsPanel" style="display:none;">
-    <div class="results-header">
-      <strong id="resultCount"></strong>
-      <div style="display:flex; gap:10px; flex-wrap: wrap;">
-        <button class="download-btn" id="scrapeEmailsBtn">Scrape Websites</button>
-        <button class="download-btn" id="verifyEmailsBtn">Verify Emails</button>
-        <button class="download-btn" id="downloadBtn">Download CSV</button>
-        <button class="download-btn" id="downloadPdfBtn">Download PDF</button>
-      </div>
-    </div>
-    <div class="status" id="scrapeStatus"></div>
-    <div class="progress-wrap" id="scrapeProgressWrap">
-      <div class="progress-track"><div class="progress-fill" id="scrapeProgressFill"></div></div>
-      <div class="progress-text" id="scrapeProgressText"></div>
-    </div>
-    <div class="status" id="verifyStatus"></div>
-    <div class="progress-wrap" id="verifyProgressWrap">
-      <div class="progress-track"><div class="progress-fill" id="verifyProgressFill"></div></div>
-      <div class="progress-text" id="verifyProgressText"></div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table id="resultsTable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Address</th>
-            <th>Website</th>
-            <th>Email(s)</th>
-            <th>Verification</th>
-            <th>Website Phone</th>
-            <th>Rating</th>
-          </tr>
-        </thead>
-        <tbody id="resultsBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<script>
-const searchBtn = document.getElementById('searchBtn');
-const statusEl = document.getElementById('status');
-const resultsPanel = document.getElementById('resultsPanel');
-const resultsBody = document.getElementById('resultsBody');
-const resultCount = document.getElementById('resultCount');
-const downloadBtn = document.getElementById('downloadBtn');
-const searchProgressWrap = document.getElementById('searchProgressWrap');
-const searchProgressFill = document.getElementById('searchProgressFill');
-const searchProgressText = document.getElementById('searchProgressText');
-
-function renderResultsRows(results) {
-  resultsBody.innerHTML = '';
-  if (results.length === 0) {
-    resultsBody.innerHTML = '<tr><td colspan="8" class="empty">No results found.</td></tr>';
-    return;
-  }
-  results.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.dataset.index = i;
-    tr.innerHTML = `
+    function renderResultsRows(results) {
+      resultsBody.innerHTML = '';
+      if (results.length === 0) {
+        resultsBody.innerHTML = '<tr><td colspan="8" class="empty">No results found.</td></tr>';
+        return;
+      }
+      results.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.dataset.index = i;
+        tr.innerHTML = `
       <td>${escapeHtml(r.name)}</td>
       <td>${escapeHtml(r.phone) || '—'}</td>
       <td>${escapeHtml(r.address)}</td>
@@ -268,255 +464,256 @@ function renderResultsRows(results) {
       <td class="phone-cell">${escapeHtml(r.website_phone) || '—'}</td>
       <td>${r.rating || '—'}</td>
     `;
-    resultsBody.appendChild(tr);
-  });
-}
+        resultsBody.appendChild(tr);
+      });
+    }
 
-searchBtn.addEventListener('click', () => {
-  const keyword = document.getElementById('keyword').value.trim();
-  const location = document.getElementById('location').value.trim();
-  const limit = document.getElementById('limit').value;
+    searchBtn.addEventListener('click', () => {
+      const keyword = document.getElementById('keyword').value.trim();
+      const location = document.getElementById('location').value.trim();
+      const limit = document.getElementById('limit').value;
 
-  if (!keyword || !location) {
-    statusEl.textContent = 'Please enter both a business type and a location.';
-    statusEl.className = 'status error';
-    return;
-  }
-
-  searchBtn.disabled = true;
-  statusEl.className = 'status';
-  statusEl.textContent = 'Starting search...';
-  resultsPanel.style.display = 'none';
-  searchProgressWrap.style.display = 'block';
-  searchProgressFill.style.width = '0%';
-  searchProgressText.textContent = '';
-
-  fetch('/search/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keyword, location, limit })
-  })
-    .then(res => res.json().then(data => ({ ok: res.ok, data })))
-    .then(({ ok, data }) => {
-      if (!ok) {
-        searchProgressWrap.style.display = 'none';
-        statusEl.textContent = data.error || 'Something went wrong.';
+      if (!keyword || !location) {
+        statusEl.textContent = 'Please enter both a business type and a location.';
         statusEl.className = 'status error';
-        searchBtn.disabled = false;
         return;
       }
-      pollSearchProgress();
-    })
-    .catch(err => {
-      searchProgressWrap.style.display = 'none';
-      statusEl.textContent = 'Network error: ' + err.message;
-      statusEl.className = 'status error';
-      searchBtn.disabled = false;
+
+      searchBtn.disabled = true;
+      statusEl.className = 'status';
+      statusEl.textContent = 'Starting search...';
+      resultsPanel.style.display = 'none';
+      searchProgressWrap.style.display = 'block';
+      searchProgressFill.style.width = '0%';
+      searchProgressText.textContent = '';
+
+      fetch('/search/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, location, limit })
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            searchProgressWrap.style.display = 'none';
+            statusEl.textContent = data.error || 'Something went wrong.';
+            statusEl.className = 'status error';
+            searchBtn.disabled = false;
+            return;
+          }
+          pollSearchProgress();
+        })
+        .catch(err => {
+          searchProgressWrap.style.display = 'none';
+          statusEl.textContent = 'Network error: ' + err.message;
+          statusEl.className = 'status error';
+          searchBtn.disabled = false;
+        });
     });
-});
 
-async function pollSearchProgress() {
-  try {
-    const res = await fetch('/search/progress');
-    const data = await res.json();
+    async function pollSearchProgress() {
+      try {
+        const res = await fetch('/search/progress');
+        const data = await res.json();
 
-    if (data.error) {
-      searchProgressWrap.style.display = 'none';
-      statusEl.textContent = data.error;
-      statusEl.className = 'status error';
-      searchBtn.disabled = false;
-      return;
-    }
-
-    const phaseLabel = data.phase === 'searching'
-      ? 'Querying Google Places...'
-      : 'Fetching details for each business...';
-    const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
-
-    if (data.phase === 'fetching_details') {
-      searchProgressFill.style.width = pct + '%';
-      searchProgressText.textContent = `${phaseLabel} ${data.done}/${data.total} (${pct}%) — ${formatEta(data.eta_seconds)}`;
-    } else {
-      searchProgressFill.style.width = '10%';
-      searchProgressText.textContent = phaseLabel;
-    }
-
-    if (data.results && data.results.length) {
-      renderResultsRows(data.results);
-      resultCount.textContent = `${data.results.length} lead(s)`;
-      resultsPanel.style.display = 'block';
-    }
-
-    if (data.running) {
-      setTimeout(pollSearchProgress, 1000);
-    } else {
-      searchProgressWrap.style.display = 'none';
-      statusEl.textContent = `Done — ${data.count} result(s) found.`;
-      renderResultsRows(data.results);
-      resultCount.textContent = `${data.count} lead(s)`;
-      resultsPanel.style.display = 'block';
-      searchBtn.disabled = false;
-    }
-  } catch (err) {
-    searchProgressWrap.style.display = 'none';
-    statusEl.textContent = 'Network error: ' + err.message;
-    statusEl.className = 'status error';
-    searchBtn.disabled = false;
-  }
-}
-
-downloadBtn.addEventListener('click', () => {
-  window.location.href = '/download-csv';
-});
-
-document.getElementById('downloadPdfBtn').addEventListener('click', () => {
-  window.location.href = '/download-pdf';
-});
-
-function formatEta(seconds) {
-  if (seconds === null || seconds === undefined) return 'estimating time remaining...';
-  if (seconds < 5) return 'almost done...';
-  if (seconds < 60) return `about ${seconds}s remaining`;
-  const mins = Math.round(seconds / 60);
-  return `about ${mins} minute${mins === 1 ? '' : 's'} remaining`;
-}
-
-// Kicks off a background job, then polls its progress endpoint until done.
-// onTick(data) fires on every poll; onDone(data) fires once when finished.
-async function runJobWithProgress(startUrl, progressUrl, { onTick, onDone, onError, intervalMs = 1000 }) {
-  const startRes = await fetch(startUrl, { method: 'POST' });
-  const startData = await startRes.json();
-  if (!startRes.ok) {
-    onError(startData.error || 'Something went wrong.');
-    return;
-  }
-
-  const poll = async () => {
-    try {
-      const res = await fetch(progressUrl);
-      const data = await res.json();
-      onTick(data);
-      if (data.running) {
-        setTimeout(poll, intervalMs);
-      } else {
-        onDone(data);
-      }
-    } catch (err) {
-      onError('Network error: ' + err.message);
-    }
-  };
-  poll();
-}
-
-const scrapeEmailsBtn = document.getElementById('scrapeEmailsBtn');
-const scrapeStatus = document.getElementById('scrapeStatus');
-const scrapeProgressWrap = document.getElementById('scrapeProgressWrap');
-const scrapeProgressFill = document.getElementById('scrapeProgressFill');
-const scrapeProgressText = document.getElementById('scrapeProgressText');
-
-scrapeEmailsBtn.addEventListener('click', () => {
-  scrapeEmailsBtn.disabled = true;
-  searchBtn.disabled = true;
-  scrapeStatus.className = 'status';
-  scrapeStatus.textContent = 'Visiting each business website to look for a contact email...';
-  scrapeProgressWrap.style.display = 'block';
-  scrapeProgressFill.style.width = '0%';
-
-  runJobWithProgress('/scrape-emails/start', '/scrape-emails/progress', {
-    onTick: (data) => {
-      const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
-      scrapeProgressFill.style.width = pct + '%';
-      scrapeProgressText.textContent = `${data.done}/${data.total} website(s) checked (${pct}%) — ${formatEta(data.eta_seconds)}`;
-
-      data.results.forEach((r, i) => {
-        const tr = resultsBody.querySelector(`tr[data-index="${i}"]`);
-        if (tr) {
-          tr.querySelector('.email-cell').textContent = (r.all_emails || r.email) || '—';
-          tr.querySelector('.phone-cell').textContent = r.website_phone || '—';
+        if (data.error) {
+          searchProgressWrap.style.display = 'none';
+          statusEl.textContent = data.error;
+          statusEl.className = 'status error';
+          searchBtn.disabled = false;
+          return;
         }
-      });
-    },
-    onDone: (data) => {
-      scrapeProgressWrap.style.display = 'none';
-      scrapeStatus.textContent = `Done — found ${data.total_emails} email address(es) across ${data.businesses_with_email} of ${data.done} website(s) checked.`;
-      scrapeEmailsBtn.disabled = false;
-      searchBtn.disabled = false;
-    },
-    onError: (msg) => {
-      scrapeProgressWrap.style.display = 'none';
-      scrapeStatus.textContent = msg;
-      scrapeStatus.className = 'status error';
-      scrapeEmailsBtn.disabled = false;
-      searchBtn.disabled = false;
-    },
-  });
-});
 
-function renderVerificationBadges(verificationStr) {
-  if (!verificationStr) return '—';
-  // format from backend: "email1@x.com (valid); email2@x.com (invalid)"
-  return verificationStr.split(';').map(part => {
-    const m = part.trim().match(/^(.*)\((\w+)\)$/);
-    if (!m) return escapeHtml(part.trim());
-    const [, email, status] = m;
-    return `<span class="badge ${status}">${status}</span> ${escapeHtml(email.trim())}`;
-  }).join('<br>');
-}
+        const phaseLabel = data.phase === 'searching'
+          ? 'Querying Google Places...'
+          : 'Fetching details for each business...';
+        const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
 
-const verifyEmailsBtn = document.getElementById('verifyEmailsBtn');
-const verifyStatus = document.getElementById('verifyStatus');
-const verifyProgressWrap = document.getElementById('verifyProgressWrap');
-const verifyProgressFill = document.getElementById('verifyProgressFill');
-const verifyProgressText = document.getElementById('verifyProgressText');
-
-verifyEmailsBtn.addEventListener('click', () => {
-  verifyEmailsBtn.disabled = true;
-  searchBtn.disabled = true;
-  verifyStatus.className = 'status';
-  verifyStatus.textContent = 'Checking each email against its mail server...';
-  verifyProgressWrap.style.display = 'block';
-  verifyProgressFill.style.width = '0%';
-
-  runJobWithProgress('/verify-current/start', '/verify-current/progress', {
-    onTick: (data) => {
-      const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
-      verifyProgressFill.style.width = pct + '%';
-      verifyProgressText.textContent = `${data.done}/${data.total} email(s) checked (${pct}%) — ${formatEta(data.eta_seconds)}`;
-
-      data.results.forEach((r, i) => {
-        const tr = resultsBody.querySelector(`tr[data-index="${i}"]`);
-        if (tr) {
-          tr.querySelector('.verify-cell').innerHTML = renderVerificationBadges(r.email_verification);
+        if (data.phase === 'fetching_details') {
+          searchProgressFill.style.width = pct + '%';
+          searchProgressText.textContent = `${phaseLabel} ${data.done}/${data.total} (${pct}%) — ${formatEta(data.eta_seconds)}`;
+        } else {
+          searchProgressFill.style.width = '10%';
+          searchProgressText.textContent = phaseLabel;
         }
-      });
-    },
-    onDone: (data) => {
-      verifyProgressWrap.style.display = 'none';
-      let msg = `Done — ${data.done} email(s) checked: ${data.valid} valid, ${data.invalid} invalid, ${data.unknown} unknown.`;
-      if (!data.port_25_open) {
-        msg += ' Heads up: this network appears to block outbound SMTP (port 25) — most results are likely "unknown" as a result, not necessarily bad addresses.';
-        verifyStatus.className = 'status error';
-      }
-      verifyStatus.textContent = msg;
-      verifyEmailsBtn.disabled = false;
-      searchBtn.disabled = false;
-    },
-    onError: (msg) => {
-      verifyProgressWrap.style.display = 'none';
-      verifyStatus.textContent = msg;
-      verifyStatus.className = 'status error';
-      verifyEmailsBtn.disabled = false;
-      searchBtn.disabled = false;
-    },
-  });
-});
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[m]));
-}
-</script>
+        if (data.results && data.results.length) {
+          renderResultsRows(data.results);
+          resultCount.textContent = `${data.results.length} lead(s)`;
+          resultsPanel.style.display = 'block';
+        }
+
+        if (data.running) {
+          setTimeout(pollSearchProgress, 1000);
+        } else {
+          searchProgressWrap.style.display = 'none';
+          statusEl.textContent = `Done — ${data.count} result(s) found.`;
+          renderResultsRows(data.results);
+          resultCount.textContent = `${data.count} lead(s)`;
+          resultsPanel.style.display = 'block';
+          searchBtn.disabled = false;
+        }
+      } catch (err) {
+        searchProgressWrap.style.display = 'none';
+        statusEl.textContent = 'Network error: ' + err.message;
+        statusEl.className = 'status error';
+        searchBtn.disabled = false;
+      }
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      window.location.href = '/download-csv';
+    });
+
+    document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+      window.location.href = '/download-pdf';
+    });
+
+    function formatEta(seconds) {
+      if (seconds === null || seconds === undefined) return 'estimating time remaining...';
+      if (seconds < 5) return 'almost done...';
+      if (seconds < 60) return `about ${seconds}s remaining`;
+      const mins = Math.round(seconds / 60);
+      return `about ${mins} minute${mins === 1 ? '' : 's'} remaining`;
+    }
+
+    // Kicks off a background job, then polls its progress endpoint until done.
+    // onTick(data) fires on every poll; onDone(data) fires once when finished.
+    async function runJobWithProgress(startUrl, progressUrl, { onTick, onDone, onError, intervalMs = 1000 }) {
+      const startRes = await fetch(startUrl, { method: 'POST' });
+      const startData = await startRes.json();
+      if (!startRes.ok) {
+        onError(startData.error || 'Something went wrong.');
+        return;
+      }
+
+      const poll = async () => {
+        try {
+          const res = await fetch(progressUrl);
+          const data = await res.json();
+          onTick(data);
+          if (data.running) {
+            setTimeout(poll, intervalMs);
+          } else {
+            onDone(data);
+          }
+        } catch (err) {
+          onError('Network error: ' + err.message);
+        }
+      };
+      poll();
+    }
+
+    const scrapeEmailsBtn = document.getElementById('scrapeEmailsBtn');
+    const scrapeStatus = document.getElementById('scrapeStatus');
+    const scrapeProgressWrap = document.getElementById('scrapeProgressWrap');
+    const scrapeProgressFill = document.getElementById('scrapeProgressFill');
+    const scrapeProgressText = document.getElementById('scrapeProgressText');
+
+    scrapeEmailsBtn.addEventListener('click', () => {
+      scrapeEmailsBtn.disabled = true;
+      searchBtn.disabled = true;
+      scrapeStatus.className = 'status';
+      scrapeStatus.textContent = 'Visiting each business website to look for a contact email...';
+      scrapeProgressWrap.style.display = 'block';
+      scrapeProgressFill.style.width = '0%';
+
+      runJobWithProgress('/scrape-emails/start', '/scrape-emails/progress', {
+        onTick: (data) => {
+          const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
+          scrapeProgressFill.style.width = pct + '%';
+          scrapeProgressText.textContent = `${data.done}/${data.total} website(s) checked (${pct}%) — ${formatEta(data.eta_seconds)}`;
+
+          data.results.forEach((r, i) => {
+            const tr = resultsBody.querySelector(`tr[data-index="${i}"]`);
+            if (tr) {
+              tr.querySelector('.email-cell').textContent = (r.all_emails || r.email) || '—';
+              tr.querySelector('.phone-cell').textContent = r.website_phone || '—';
+            }
+          });
+        },
+        onDone: (data) => {
+          scrapeProgressWrap.style.display = 'none';
+          scrapeStatus.textContent = `Done — found ${data.total_emails} email address(es) across ${data.businesses_with_email} of ${data.done} website(s) checked.`;
+          scrapeEmailsBtn.disabled = false;
+          searchBtn.disabled = false;
+        },
+        onError: (msg) => {
+          scrapeProgressWrap.style.display = 'none';
+          scrapeStatus.textContent = msg;
+          scrapeStatus.className = 'status error';
+          scrapeEmailsBtn.disabled = false;
+          searchBtn.disabled = false;
+        },
+      });
+    });
+
+    function renderVerificationBadges(verificationStr) {
+      if (!verificationStr) return '—';
+      // format from backend: "email1@x.com (valid); email2@x.com (invalid)"
+      return verificationStr.split(';').map(part => {
+        const m = part.trim().match(/^(.*)\((\w+)\)$/);
+        if (!m) return escapeHtml(part.trim());
+        const [, email, status] = m;
+        return `<span class="badge ${status}">${status}</span> ${escapeHtml(email.trim())}`;
+      }).join('<br>');
+    }
+
+    const verifyEmailsBtn = document.getElementById('verifyEmailsBtn');
+    const verifyStatus = document.getElementById('verifyStatus');
+    const verifyProgressWrap = document.getElementById('verifyProgressWrap');
+    const verifyProgressFill = document.getElementById('verifyProgressFill');
+    const verifyProgressText = document.getElementById('verifyProgressText');
+
+    verifyEmailsBtn.addEventListener('click', () => {
+      verifyEmailsBtn.disabled = true;
+      searchBtn.disabled = true;
+      verifyStatus.className = 'status';
+      verifyStatus.textContent = 'Checking each email against its mail server...';
+      verifyProgressWrap.style.display = 'block';
+      verifyProgressFill.style.width = '0%';
+
+      runJobWithProgress('/verify-current/start', '/verify-current/progress', {
+        onTick: (data) => {
+          const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
+          verifyProgressFill.style.width = pct + '%';
+          verifyProgressText.textContent = `${data.done}/${data.total} email(s) checked (${pct}%) — ${formatEta(data.eta_seconds)}`;
+
+          data.results.forEach((r, i) => {
+            const tr = resultsBody.querySelector(`tr[data-index="${i}"]`);
+            if (tr) {
+              tr.querySelector('.verify-cell').innerHTML = renderVerificationBadges(r.email_verification);
+            }
+          });
+        },
+        onDone: (data) => {
+          verifyProgressWrap.style.display = 'none';
+          let msg = `Done — ${data.done} email(s) checked: ${data.valid} valid, ${data.invalid} invalid, ${data.unknown} unknown.`;
+          if (!data.port_25_open) {
+            msg += ' Heads up: this network appears to block outbound SMTP (port 25) — most results are likely "unknown" as a result, not necessarily bad addresses.';
+            verifyStatus.className = 'status error';
+          }
+          verifyStatus.textContent = msg;
+          verifyEmailsBtn.disabled = false;
+          searchBtn.disabled = false;
+        },
+        onError: (msg) => {
+          verifyProgressWrap.style.display = 'none';
+          verifyStatus.textContent = msg;
+          verifyStatus.className = 'status error';
+          verifyEmailsBtn.disabled = false;
+          searchBtn.disabled = false;
+        },
+      });
+    });
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+  </script>
 </body>
+
 </html>
