@@ -347,6 +347,46 @@
         padding: 10px 8px;
       }
     }
+
+    /* Tab styles */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-button {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+      margin-bottom: -1px;
+    }
+
+    .tab-button:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
   </style>
 </head>
 
@@ -365,28 +405,62 @@
     </div>
     {% endif %}
 
-    <div class="panel">
-      <div class="row">
-        <div class="field">
-          <label for="keyword">Business type</label>
-          <input id="keyword" type="text" placeholder="e.g. hair salons">
+    <!-- Search Mode Tabs -->
+    <div class="tabs">
+      <button class="tab-button active" data-tab="search-by-type">Search by Business Type</button>
+      <button class="tab-button" data-tab="search-by-names">Search Bulk Businesses</button>
+    </div>
+
+    <!-- Tab 1: Search by Business Type -->
+    <div id="search-by-type" class="tab-content active">
+      <div class="panel">
+        <div class="row">
+          <div class="field">
+            <label for="keyword">Business type</label>
+            <input id="keyword" type="text" placeholder="e.g. hair salons">
+          </div>
+          <div class="field">
+            <label for="location">City / location</label>
+            <input id="location" type="text" placeholder="e.g. Kano, Nigeria">
+          </div>
+          <div class="field" style="max-width: 120px;">
+            <label for="limit">Max results</label>
+            <input id="limit" type="number" value="20" min="1" max="100">
+          </div>
         </div>
-        <div class="field">
-          <label for="location">City / location</label>
-          <input id="location" type="text" placeholder="e.g. Kano, Nigeria">
-        </div>
-        <div class="field" style="max-width: 120px;">
-          <label for="limit">Max results</label>
-          <input id="limit" type="number" value="20" min="1" max="100">
+        <button id="searchBtn">Search by Type</button>
+        <div class="status" id="status"></div>
+        <div class="progress-wrap" id="searchProgressWrap">
+          <div class="progress-track">
+            <div class="progress-fill" id="searchProgressFill"></div>
+          </div>
+          <div class="progress-text" id="searchProgressText"></div>
         </div>
       </div>
-      <button id="searchBtn">Search</button>
-      <div class="status" id="status"></div>
-      <div class="progress-wrap" id="searchProgressWrap">
-        <div class="progress-track">
-          <div class="progress-fill" id="searchProgressFill"></div>
+    </div>
+
+    <!-- Tab 2: Search Bulk Businesses -->
+    <div id="search-by-names" class="tab-content">
+      <div class="panel">
+        <div class="field">
+          <label for="bulkNames">Company names (one per line)</label>
+          <textarea id="bulkNames" placeholder="Paste company names here&#10;One per line or comma/tab separated&#10;e.g.&#10;ABC Ltd&#10;XYZ Corp&#10;Tech Solutions" 
+                    style="width:100%; height:150px; background:#0f1115; border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:monospace; font-size:0.9rem; resize:vertical;"></textarea>
         </div>
-        <div class="progress-text" id="searchProgressText"></div>
+        <div class="row">
+          <div class="field">
+            <label for="bulkLocation">Location (optional)</label>
+            <input id="bulkLocation" type="text" placeholder="e.g. Kano, Nigeria">
+          </div>
+        </div>
+        <button id="searchBulkBtn">Search Bulk Businesses</button>
+        <div class="status" id="statusBulk"></div>
+        <div class="progress-wrap" id="searchBulkProgressWrap">
+          <div class="progress-track">
+            <div class="progress-fill" id="searchBulkProgressFill"></div>
+          </div>
+          <div class="progress-text" id="searchBulkProgressText"></div>
+        </div>
       </div>
     </div>
 
@@ -398,6 +472,7 @@
           <button class="download-btn" id="verifyEmailsBtn">Verify Emails</button>
           <button class="download-btn" id="downloadBtn">Download CSV</button>
           <button class="download-btn" id="downloadPdfBtn">Download PDF</button>
+          <button class="download-btn" id="downloadDocxBtn">Download DOCX</button>
         </div>
       </div>
       <div class="status" id="scrapeStatus"></div>
@@ -435,6 +510,23 @@
   </div>
 
   <script>
+    // Tab switching functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Add active class to clicked button and corresponding content
+        button.classList.add('active');
+        const tabName = button.getAttribute('data-tab');
+        document.getElementById(tabName).classList.add('active');
+      });
+    });
+
     const searchBtn = document.getElementById('searchBtn');
     const statusEl = document.getElementById('status');
     const resultsPanel = document.getElementById('resultsPanel');
@@ -444,6 +536,13 @@
     const searchProgressWrap = document.getElementById('searchProgressWrap');
     const searchProgressFill = document.getElementById('searchProgressFill');
     const searchProgressText = document.getElementById('searchProgressText');
+
+    // Bulk search elements
+    const searchBulkBtn = document.getElementById('searchBulkBtn');
+    const statusBulkEl = document.getElementById('statusBulk');
+    const searchBulkProgressWrap = document.getElementById('searchBulkProgressWrap');
+    const searchBulkProgressFill = document.getElementById('searchBulkProgressFill');
+    const searchBulkProgressText = document.getElementById('searchBulkProgressText');
 
     function renderResultsRows(results) {
       resultsBody.innerHTML = '';
@@ -511,6 +610,49 @@
         });
     });
 
+    // Bulk search button handler
+    searchBulkBtn.addEventListener('click', () => {
+      const names = document.getElementById('bulkNames').value.trim();
+      const location = document.getElementById('bulkLocation').value.trim();
+
+      if (!names) {
+        statusBulkEl.textContent = 'Please paste at least one company name.';
+        statusBulkEl.className = 'status error';
+        return;
+      }
+
+      searchBulkBtn.disabled = true;
+      statusBulkEl.className = 'status';
+      statusBulkEl.textContent = 'Starting bulk search...';
+      resultsPanel.style.display = 'none';
+      searchBulkProgressWrap.style.display = 'block';
+      searchBulkProgressFill.style.width = '0%';
+      searchBulkProgressText.textContent = '';
+
+      fetch('/search-by-name/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names, location })
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            searchBulkProgressWrap.style.display = 'none';
+            statusBulkEl.textContent = data.error || 'Something went wrong.';
+            statusBulkEl.className = 'status error';
+            searchBulkBtn.disabled = false;
+            return;
+          }
+          pollBulkSearchProgress();
+        })
+        .catch(err => {
+          searchBulkProgressWrap.style.display = 'none';
+          statusBulkEl.textContent = 'Network error: ' + err.message;
+          statusBulkEl.className = 'status error';
+          searchBulkBtn.disabled = false;
+        });
+    });
+
     async function pollSearchProgress() {
       try {
         const res = await fetch('/search/progress');
@@ -561,12 +703,62 @@
       }
     }
 
+    async function pollBulkSearchProgress() {
+      try {
+        const res = await fetch('/search-by-name/progress');
+        const data = await res.json();
+
+        if (data.error) {
+          searchBulkProgressWrap.style.display = 'none';
+          statusBulkEl.textContent = data.error;
+          statusBulkEl.className = 'status error';
+          searchBulkBtn.disabled = false;
+          return;
+        }
+
+        const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
+        searchBulkProgressFill.style.width = pct + '%';
+        searchBulkProgressText.textContent = `Processing companies ${data.done}/${data.total} (${pct}%) — ${formatEta(data.eta_seconds)}`;
+
+        if (data.results && data.results.length) {
+          renderResultsRows(data.results);
+          resultCount.textContent = `${data.results.length} lead(s)`;
+          resultsPanel.style.display = 'block';
+        }
+
+        if (data.running) {
+          setTimeout(pollBulkSearchProgress, 1000);
+        } else {
+          searchBulkProgressWrap.style.display = 'none';
+          let msg = `Done — ${data.count} result(s) found`;
+          if (data.not_found && data.not_found.length > 0) {
+            msg += ` (${data.not_found.length} not found)`;
+          }
+          msg += '.';
+          statusBulkEl.textContent = msg;
+          renderResultsRows(data.results);
+          resultCount.textContent = `${data.count} lead(s)`;
+          resultsPanel.style.display = 'block';
+          searchBulkBtn.disabled = false;
+        }
+      } catch (err) {
+        searchBulkProgressWrap.style.display = 'none';
+        statusBulkEl.textContent = 'Network error: ' + err.message;
+        statusBulkEl.className = 'status error';
+        searchBulkBtn.disabled = false;
+      }
+    }
+
     downloadBtn.addEventListener('click', () => {
       window.location.href = '/download-csv';
     });
 
     document.getElementById('downloadPdfBtn').addEventListener('click', () => {
       window.location.href = '/download-pdf';
+    });
+
+    document.getElementById('downloadDocxBtn').addEventListener('click', () => {
+      window.location.href = '/download-docx';
     });
 
     function formatEta(seconds) {

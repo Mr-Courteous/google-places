@@ -19,10 +19,12 @@ so it's never exposed to anyone else.
 import os
 import csv
 import io
+import re
 import time
 import hmac
 import base64
 import hashlib
+import difflib
 import threading
 import requests
 from flask import Flask, render_template, request, jsonify, Response
@@ -70,6 +72,11 @@ SCRAPE_LOCK = threading.Lock()
 SEARCH_JOB = {"running": False, "phase": "", "total": 0, "done": 0, "started_at": None,
               "error": None, "count": 0}
 SEARCH_LOCK = threading.Lock()
+
+# Search by a pasted list of company names (instead of keyword+location).
+NAME_SEARCH_JOB = {"running": False, "total": 0, "done": 0, "started_at": None,
+                    "error": None, "count": 0, "not_found": []}
+NAME_SEARCH_LOCK = threading.Lock()
 
 VERIFY_JOB = {"running": False, "total": 0, "done": 0, "started_at": None,
               "valid": 0, "invalid": 0, "unknown": 0, "port_25_open": None}
@@ -175,6 +182,122 @@ def search_places(query, max_results=60, on_progress=None):
     return all_places[:max_results]
 
 
+# True legal-entity suffixes only — things that get abbreviated/dropped
+# inconsistently between how a company is registered and how it's actually
+# listed on Google Maps. Deliberately NOT stripping words like "Solutions",
+# "Consulting", "Technologies" etc. — those are usually part of the real,
+# distinguishing brand name (e.g. "Dragnet Solutions"), and dropping them
+# turns the fallback query into something too generic to find the right
+# business at all.
+_LEGAL_SUFFIXES = re.compile(
+    r"\b(limited|ltd\.?|llc|plc|inc\.?|incorporated|co\.?|company)\b",
+    re.IGNORECASE,
+)
+
+
+def _simplify_company_name(name):
+    """Strip common legal/descriptor suffixes to build a looser fallback query."""
+    simplified = _LEGAL_SUFFIXES.sub(" ", name)
+    simplified = " ".join(simplified.split())
+    return simplified.strip(" ,.-")
+
+
+def _name_similarity(a, b):
+    return difflib.SequenceMatcher(None, a.lower().strip(), b.lower().strip()).ratio()
+
+
+def _text_search(query, page_size=5):
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": API_KEY,
+        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+    }
+    body = {"textQuery": query, "pageSize": page_size}
+
+    try:
+        resp = requests.post(TEXT_SEARCH_URL, headers=headers, json=body,
+                              timeout=REQUEST_TIMEOUT, proxies=NO_PROXY)
+    except requests.exceptions.Timeout:
+        raise RuntimeError(
+            f"Google Places API didn't respond within {REQUEST_TIMEOUT}s while looking up "
+            f"'{query}'. This usually means a network/firewall/VPN issue on this machine."
+        )
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Network error contacting Google Places API for '{query}': {e}")
+
+    if resp.status_code != 200:
+        raise RuntimeError(_google_error_message(resp))
+
+    return resp.json().get("places", [])
+
+
+def search_place_by_name(name, location_hint="", max_candidates=1):
+    """
+    Text-search for businesses by name (optionally narrowed by a location hint,
+    e.g. 'Lagos, Nigeria') and return matching place(s).
+
+    A single rigid query misses a lot of real businesses — many companies
+    (especially smaller/local ones) aren't listed on Google Maps under
+    exactly their registered name, or only show up once you drop the
+    location hint or the "Limited"/"Ltd"-style suffix. So this tries a
+    handful of query variants and collects all candidates.
+
+    Args:
+        name: Company name to search for
+        location_hint: Optional location to narrow search (e.g. 'Lagos, Nigeria')
+        max_candidates: Maximum number of candidates to return (default 1 for 
+                       compatibility; use higher for bulk search)
+
+    Returns:
+        For max_candidates=1: single place dict or None
+        For max_candidates>1: list of place dicts (sorted by similarity score)
+    """
+    name = name.strip()
+    if not name:
+        return [] if max_candidates > 1 else None
+
+    queries = []
+    if location_hint:
+        queries.append(f"{name} {location_hint}")
+    queries.append(name)
+    simplified = _simplify_company_name(name)
+    if simplified and simplified.lower() != name.lower():
+        if location_hint:
+            queries.append(f"{simplified} {location_hint}")
+        queries.append(simplified)
+
+    # Collect all candidates with their scores
+    candidates = {}  # place_id -> (place, score)
+
+    for query in queries:
+        places = _text_search(query, page_size=5)
+        for place in places:
+            place_id = place.get("id")
+            if not place_id:
+                continue
+            
+            # Skip if we already have this place from a better query
+            if place_id in candidates:
+                continue
+                
+            candidate_name = place.get("displayName", {}).get("text", "")
+            score = _name_similarity(name, candidate_name)
+            candidates[place_id] = (place, score)
+
+        # Good enough match found — no need to try looser fallback queries.
+        if candidates and max(score for _, score in candidates.values()) >= 0.6:
+            break
+
+    # Sort by score (descending) and return
+    sorted_candidates = sorted(candidates.values(), key=lambda x: x[1], reverse=True)
+    results = [place for place, _ in sorted_candidates[:max_candidates]]
+
+    # Return single result or list based on max_candidates
+    if max_candidates == 1:
+        return results[0] if results else None
+    return results
+
+
 def get_place_details(place_id):
     headers = {
         "Content-Type": "application/json",
@@ -241,6 +364,7 @@ def _run_search_job(keyword, location, limit):
                     "email": "",
                     "all_emails": "",
                     "website_phone": "",
+                    "call_status": "",
                     "scraped": False,
                     "email_verification": "",
                     "email_verified": False,
@@ -295,6 +419,135 @@ def search_progress():
         "total": job["total"],
         "error": job["error"],
         "count": job["count"],
+        "eta_seconds": _eta_seconds(job),
+        "results": LAST_RESULTS,
+    })
+
+
+def _run_name_search_job(names, location_hint, max_candidates_per_name=3):
+    """
+    Search for multiple businesses by name. For each company name, try to find
+    up to max_candidates_per_name matches and add them all to results.
+    This gives more comprehensive results in bulk searches.
+    """
+    global LAST_RESULTS
+
+    with NAME_SEARCH_LOCK:
+        NAME_SEARCH_JOB.update(running=True, total=len(names), done=0,
+                                started_at=time.time(), error=None, count=0, not_found=[])
+
+    LAST_RESULTS = []
+    not_found = []
+
+    for name in names:
+        places = []
+        try:
+            places = search_place_by_name(name, location_hint, max_candidates=max_candidates_per_name)
+            # Handle case where function returns single place or list
+            if isinstance(places, dict):
+                places = [places]
+            elif not places:
+                places = []
+        except RuntimeError as e:
+            # Keep going — one bad lookup shouldn't kill the whole batch.
+            # We surface the last error message so the user knows something's wrong.
+            with NAME_SEARCH_LOCK:
+                NAME_SEARCH_JOB["error"] = str(e)
+
+        if places:
+            found_for_this_name = 0
+            for place in places:
+                place_id = place.get("id")
+                details = get_place_details(place_id) if place_id else None
+                if details:
+                    LAST_RESULTS.append({
+                        "name": details.get("displayName", {}).get("text", "") or name,
+                        "phone": details.get("internationalPhoneNumber") or details.get("nationalPhoneNumber", ""),
+                        "address": details.get("formattedAddress", ""),
+                        "website": details.get("websiteUri", ""),
+                        "rating": details.get("rating", ""),
+                        "maps_url": details.get("googleMapsUri", ""),
+                        "email": "",
+                        "all_emails": "",
+                        "website_phone": "",
+                        "call_status": "",
+                        "scraped": False,
+                        "email_verification": "",
+                        "email_verified": False,
+                        "matched_query": name,
+                    })
+                    found_for_this_name += 1
+                    time.sleep(0.1)  # Small delay between detail fetches
+            
+            if found_for_this_name == 0:
+                not_found.append(name)
+        else:
+            not_found.append(name)
+
+        with NAME_SEARCH_LOCK:
+            NAME_SEARCH_JOB["done"] += 1
+            NAME_SEARCH_JOB["not_found"] = list(not_found)
+
+        time.sleep(0.1)
+
+    with NAME_SEARCH_LOCK:
+        NAME_SEARCH_JOB.update(running=False, count=len(LAST_RESULTS))
+
+
+@app.route("/search-by-name/start", methods=["POST"])
+def search_by_name_start():
+    if not API_KEY or API_KEY == "your_key_here":
+        return jsonify({
+            "error": "No API key configured. Open the .env file in this folder "
+                     "and replace 'your_key_here' with your real Google Places API key."
+        }), 400
+
+    with NAME_SEARCH_LOCK:
+        if NAME_SEARCH_JOB["running"]:
+            return jsonify({"error": "A search is already running."}), 409
+
+    payload = request.get_json() or {}
+    raw_names = payload.get("names") or ""
+    location_hint = (payload.get("location") or "").strip()
+
+    # Accept names separated by newlines, commas, semicolons, or tabs (people
+    # paste from all sorts of sources: a plain list, a numbered list, a
+    # spreadsheet column pasted as text, etc.) — one company per entry.
+    raw_lines = re.split(r"[\n,;\t]+", raw_names)
+    seen = set()
+    names = []
+    for line in raw_lines:
+        cleaned = line.strip()
+        # Strip common list markers: "1.", "1)", "-", "*", "•"
+        cleaned = re.sub(r"^\s*(?:\d+[.)]|[-*•])\s*", "", cleaned).strip()
+        if cleaned and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            names.append(cleaned)
+
+    if not names:
+        return jsonify({"error": "Please paste at least one company name (one per line)."}), 400
+    if len(names) > 200:
+        return jsonify({"error": "Please limit a batch to 200 company names at a time."}), 400
+
+    global LAST_SEARCH_QUERY
+    LAST_SEARCH_QUERY = f"{len(names)} companies" + (f" in {location_hint}" if location_hint else "")
+
+    threading.Thread(target=_run_name_search_job, args=(names, location_hint), daemon=True).start()
+    return jsonify({"started": True, "total": len(names)})
+
+
+@app.route("/search-by-name/progress")
+def search_by_name_progress():
+    with NAME_SEARCH_LOCK:
+        job = dict(NAME_SEARCH_JOB)
+
+    return jsonify({
+        "running": job["running"],
+        "done": job["done"],
+        "total": job["total"],
+        "error": job["error"],
+        "count": job["count"],
+        "not_found": job["not_found"],
         "eta_seconds": _eta_seconds(job),
         "results": LAST_RESULTS,
     })
@@ -433,7 +686,7 @@ def verify_current_progress():
     })
 
 
-CSV_FIELDS = ["name", "phone", "website_phone", "address", "website", "email", "all_emails", "email_verification", "rating", "maps_url"]
+CSV_FIELDS = ["name", "phone", "website_phone", "address", "website", "email", "all_emails", "email_verification", "rating", "maps_url", "call_status"]
 
 
 @app.route("/download-csv")
@@ -527,6 +780,56 @@ def download_pdf():
         mimetype="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@app.route("/download-docx")
+def download_docx():
+    if not LAST_RESULTS:
+        return "No results yet — run a search first.", 400
+
+    try:
+        from docx import Document
+    except ImportError:
+        return "DOCX export requires the python-docx package. Install it with: pip install python-docx", 500
+
+    doc = Document()
+    doc.add_heading("Lead Call Sheet", level=1)
+    doc.add_paragraph(f"Search: {LAST_SEARCH_QUERY or 'Search results'}")
+    doc.add_paragraph("Use this column to record: Called, Call Again, Didn’t Pick, Not Interested, Wrong Number, Follow Up.")
+
+    headers = ["Name", "Phone", "Address", "Website", "Email(s)", "Website Phone", "Rating", "Maps URL", "Call Status"]
+    table = doc.add_table(rows=1, cols=len(headers))
+    for i, header in enumerate(headers):
+        table.rows[0].cells[i].text = header
+
+    for row in LAST_RESULTS:
+        cells = table.add_row().cells
+        cells[0].text = row.get("name", "")
+        cells[1].text = row.get("phone", "")
+        cells[2].text = row.get("address", "")
+        cells[3].text = row.get("website", "")
+        cells[4].text = row.get("all_emails") or row.get("email") or ""
+        cells[5].text = row.get("website_phone", "")
+        cells[6].text = str(row.get("rating", ""))
+        cells[7].text = row.get("maps_url", "")
+        cells[8].text = row.get("call_status", "")
+
+    table.style = "Table Grid"
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    filename = _build_download_filename("docx")
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# Backward-compatible alias for older references/tests.
+def download_doc():
+    return download_docx()
 
 
 def _run_upload_verify_job(pairs):

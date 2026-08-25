@@ -3,5 +3,6 @@ requests
 python-dotenv
 reportlab
 pdfplumber
+python-docx
 dnspython
 gunicorn
