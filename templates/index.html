@@ -544,6 +544,44 @@
     const searchBulkProgressFill = document.getElementById('searchBulkProgressFill');
     const searchBulkProgressText = document.getElementById('searchBulkProgressText');
 
+    // A search runs in a background thread on the server, independent of
+    // this page. If you refresh mid-search (or open the app in a new tab)
+    // the job is still going even though the form looks blank again — so
+    // on load, check whether one's already in flight and resume showing
+    // its progress instead of leaving you looking at an empty form that
+    // just triggers "a search is already running" if you click the button.
+    (async function resumeInProgressJobs() {
+      try {
+        const res = await fetch('/search/progress');
+        const data = await res.json();
+        if (data.running) {
+          searchBtn.disabled = true;
+          statusEl.className = 'status';
+          statusEl.textContent = 'A search is still running in the background — resuming...';
+          resultsPanel.style.display = 'none';
+          searchProgressWrap.style.display = 'block';
+          pollSearchProgress();
+        }
+      } catch (err) {
+        // Ignore — worst case you just see the normal empty form.
+      }
+
+      try {
+        const resBulk = await fetch('/search-by-name/progress');
+        const dataBulk = await resBulk.json();
+        if (dataBulk.running) {
+          searchBulkBtn.disabled = true;
+          statusBulkEl.className = 'status';
+          statusBulkEl.textContent = 'A search is still running in the background — resuming...';
+          resultsPanel.style.display = 'none';
+          searchBulkProgressWrap.style.display = 'block';
+          pollBulkSearchProgress();
+        }
+      } catch (err) {
+        // Ignore.
+      }
+    })();
+
     function renderResultsRows(results) {
       resultsBody.innerHTML = '';
       if (results.length === 0) {

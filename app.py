@@ -26,6 +26,7 @@ import base64
 import hashlib
 import difflib
 import threading
+import concurrent.futures
 import requests
 from flask import Flask, render_template, request, jsonify, Response
 from dotenv import load_dotenv
@@ -70,12 +71,24 @@ SCRAPE_JOB = {"running": False, "total": 0, "done": 0, "started_at": None,
 SCRAPE_LOCK = threading.Lock()
 
 SEARCH_JOB = {"running": False, "phase": "", "total": 0, "done": 0, "started_at": None,
-              "error": None, "count": 0}
+              "error": None, "count": 0, "generation": 0, "last_update": None}
 SEARCH_LOCK = threading.Lock()
+
+# How many business detail lookups to run at once. Google Places details
+# calls are independent of each other, so we don't need to do them one at a
+# time — a small pool of concurrent workers finishes a search of 50-100
+# businesses in a fraction of the time a sequential loop would take.
+DETAIL_FETCH_WORKERS = 8
+
+# If a search job's "running" flag has been stuck true with no progress for
+# longer than this, treat it as dead (e.g. the worker process was killed or
+# an unexpected exception escaped the background thread) instead of
+# blocking every future search attempt forever.
+STALE_JOB_SECONDS = 90
 
 # Search by a pasted list of company names (instead of keyword+location).
 NAME_SEARCH_JOB = {"running": False, "total": 0, "done": 0, "started_at": None,
-                    "error": None, "count": 0, "not_found": []}
+                    "error": None, "count": 0, "not_found": [], "last_update": None}
 NAME_SEARCH_LOCK = threading.Lock()
 
 VERIFY_JOB = {"running": False, "total": 0, "done": 0, "started_at": None,
@@ -325,58 +338,90 @@ def verify_page():
     return render_template("verify.html")
 
 
-def _run_search_job(keyword, location, limit):
+def _place_to_row(details):
+    return {
+        "name": details.get("displayName", {}).get("text", ""),
+        "phone": details.get("internationalPhoneNumber") or details.get("nationalPhoneNumber", ""),
+        "address": details.get("formattedAddress", ""),
+        "website": details.get("websiteUri", ""),
+        "rating": details.get("rating", ""),
+        "maps_url": details.get("googleMapsUri", ""),
+        "email": "",
+        "all_emails": "",
+        "website_phone": "",
+        "call_status": "",
+        "scraped": False,
+        "email_verification": "",
+        "email_verified": False,
+    }
+
+
+def _run_search_job(keyword, location, limit, generation):
     global LAST_RESULTS
 
     query = f"{keyword} in {location}"
 
     with SEARCH_LOCK:
+        if SEARCH_JOB["generation"] != generation:
+            return  # superseded before we even got going
         SEARCH_JOB.update(running=True, phase="searching", total=0, done=0,
-                           started_at=time.time(), error=None, count=0)
+                           started_at=time.time(), last_update=time.time(),
+                           error=None, count=0)
 
     def on_search_progress(found_so_far):
         with SEARCH_LOCK:
+            if SEARCH_JOB["generation"] != generation:
+                return
             SEARCH_JOB["total"] = max(SEARCH_JOB["total"], min(found_so_far, limit))
+            SEARCH_JOB["last_update"] = time.time()
 
     try:
         places = search_places(query, max_results=limit, on_progress=on_search_progress)
     except RuntimeError as e:
         with SEARCH_LOCK:
-            SEARCH_JOB.update(running=False, error=str(e))
+            if SEARCH_JOB["generation"] == generation:
+                SEARCH_JOB.update(running=False, error=str(e), last_update=time.time())
         return
 
     with SEARCH_LOCK:
-        SEARCH_JOB.update(phase="fetching_details", total=len(places), done=0, started_at=time.time())
+        if SEARCH_JOB["generation"] != generation:
+            return
+        SEARCH_JOB.update(phase="fetching_details", total=len(places), done=0,
+                           started_at=time.time(), last_update=time.time())
 
-    LAST_RESULTS = []
-    for p in places:
-        place_id = p.get("id")
-        if place_id:
-            details = get_place_details(place_id)
+    # Fetch details for every place concurrently instead of one request at a
+    # time — this is the main reason a search of 50-100 businesses used to
+    # take several minutes.
+    rows = [None] * len(places)
+
+    def fetch_one(index, place_id):
+        return index, (get_place_details(place_id) if place_id else None)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
+        futures = [executor.submit(fetch_one, i, p.get("id")) for i, p in enumerate(places)]
+        for future in concurrent.futures.as_completed(futures):
+            index, details = future.result()
             if details:
-                LAST_RESULTS.append({
-                    "name": details.get("displayName", {}).get("text", ""),
-                    "phone": details.get("internationalPhoneNumber") or details.get("nationalPhoneNumber", ""),
-                    "address": details.get("formattedAddress", ""),
-                    "website": details.get("websiteUri", ""),
-                    "rating": details.get("rating", ""),
-                    "maps_url": details.get("googleMapsUri", ""),
-                    "email": "",
-                    "all_emails": "",
-                    "website_phone": "",
-                    "call_status": "",
-                    "scraped": False,
-                    "email_verification": "",
-                    "email_verified": False,
-                })
+                rows[index] = _place_to_row(details)
 
-        with SEARCH_LOCK:
-            SEARCH_JOB["done"] += 1
-
-        time.sleep(0.1)
+            with SEARCH_LOCK:
+                if SEARCH_JOB["generation"] != generation:
+                    # A newer search has taken over — stop touching shared
+                    # state, but let already-in-flight requests finish
+                    # quietly so we don't leave dangling connections.
+                    return
+                SEARCH_JOB["done"] += 1
+                SEARCH_JOB["last_update"] = time.time()
 
     with SEARCH_LOCK:
-        SEARCH_JOB.update(running=False, count=len(LAST_RESULTS))
+        if SEARCH_JOB["generation"] != generation:
+            return
+
+    LAST_RESULTS = [r for r in rows if r is not None]
+
+    with SEARCH_LOCK:
+        if SEARCH_JOB["generation"] == generation:
+            SEARCH_JOB.update(running=False, count=len(LAST_RESULTS), last_update=time.time())
 
 
 @app.route("/search/start", methods=["POST"])
@@ -389,7 +434,13 @@ def search_start():
 
     with SEARCH_LOCK:
         if SEARCH_JOB["running"]:
-            return jsonify({"error": "A search is already running."}), 409
+            last_update = SEARCH_JOB["last_update"]
+            stale = last_update is not None and (time.time() - last_update) > STALE_JOB_SECONDS
+            if not stale:
+                return jsonify({"error": "A search is already running."}), 409
+            # No progress for a while — most likely the previous job's
+            # worker/thread died or the server restarted mid-search. Let a
+            # new search take over instead of blocking forever.
 
     payload = request.get_json()
     keyword = (payload.get("keyword") or "").strip()
@@ -403,7 +454,11 @@ def search_start():
     global LAST_SEARCH_QUERY
     LAST_SEARCH_QUERY = f"{keyword} in {location}".strip()
 
-    threading.Thread(target=_run_search_job, args=(keyword, location, limit), daemon=True).start()
+    with SEARCH_LOCK:
+        SEARCH_JOB["generation"] += 1
+        generation = SEARCH_JOB["generation"]
+
+    threading.Thread(target=_run_search_job, args=(keyword, location, limit, generation), daemon=True).start()
     return jsonify({"started": True})
 
 
@@ -434,7 +489,8 @@ def _run_name_search_job(names, location_hint, max_candidates_per_name=3):
 
     with NAME_SEARCH_LOCK:
         NAME_SEARCH_JOB.update(running=True, total=len(names), done=0,
-                                started_at=time.time(), error=None, count=0, not_found=[])
+                                started_at=time.time(), last_update=time.time(),
+                                error=None, count=0, not_found=[])
 
     LAST_RESULTS = []
     not_found = []
@@ -487,11 +543,12 @@ def _run_name_search_job(names, location_hint, max_candidates_per_name=3):
         with NAME_SEARCH_LOCK:
             NAME_SEARCH_JOB["done"] += 1
             NAME_SEARCH_JOB["not_found"] = list(not_found)
+            NAME_SEARCH_JOB["last_update"] = time.time()
 
         time.sleep(0.1)
 
     with NAME_SEARCH_LOCK:
-        NAME_SEARCH_JOB.update(running=False, count=len(LAST_RESULTS))
+        NAME_SEARCH_JOB.update(running=False, count=len(LAST_RESULTS), last_update=time.time())
 
 
 @app.route("/search-by-name/start", methods=["POST"])
@@ -504,7 +561,10 @@ def search_by_name_start():
 
     with NAME_SEARCH_LOCK:
         if NAME_SEARCH_JOB["running"]:
-            return jsonify({"error": "A search is already running."}), 409
+            last_update = NAME_SEARCH_JOB["last_update"]
+            stale = last_update is not None and (time.time() - last_update) > STALE_JOB_SECONDS
+            if not stale:
+                return jsonify({"error": "A search is already running."}), 409
 
     payload = request.get_json() or {}
     raw_names = payload.get("names") or ""
