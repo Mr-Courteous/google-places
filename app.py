@@ -152,7 +152,19 @@ def search_places(query, max_results=60, on_progress=None):
     body = {"textQuery": query, "pageSize": min(20, max_results)}
     next_page_token = None
 
-    while len(all_places) < max_results:
+    # Hard safety cap on how many pages we'll ever request, regardless of
+    # what Google's API reports. Without this, a query that only has a
+    # handful of real matches but a high requested limit can loop forever:
+    # Google's Text Search (New) API sometimes keeps returning a
+    # nextPageToken near the end of the available results even when the
+    # page it returns has zero new places, so relying solely on
+    # "no nextPageToken -> stop" is not safe.
+    max_pages = 10
+
+    for _ in range(max_pages):
+        if len(all_places) >= max_results:
+            break
+
         if next_page_token:
             body["pageToken"] = next_page_token
             time.sleep(2)
@@ -181,7 +193,13 @@ def search_places(query, max_results=60, on_progress=None):
             on_progress(len(all_places))
 
         next_page_token = data.get("nextPageToken")
-        if not next_page_token:
+
+        # Stop if there's no next page, OR if this page added nothing new.
+        # A page with a token but zero results means we've actually run out
+        # of real matches even though the API is still handing back a
+        # token — treating that as "more pages available" is what causes
+        # an endless request loop.
+        if not next_page_token or not places:
             break
 
     if not all_places:
