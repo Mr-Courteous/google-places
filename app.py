@@ -21,6 +21,7 @@ import csv
 import io
 import re
 import time
+import json
 import hmac
 import base64
 import hashlib
@@ -57,8 +58,44 @@ DETAILS_FIELD_MASK = (
 
 # Simple in-memory cache of the last search, so the CSV download route
 # doesn't need to re-hit the API.
+#
+# This is ALSO mirrored to a JSON file on disk (see _save_results /
+# _load_results_if_empty below). Render (and most PaaS hosts) can spin up
+# more than one worker process for this app, or restart/redeploy the
+# process between requests — each of those wipes a plain in-memory
+# variable. Search happens in one request, "Download PDF" in another, so
+# without the disk mirror, a search run on one worker (or before a
+# restart) becomes invisible to a later request that lands on a different
+# worker (or the fresh process), and you get "No results yet — run a
+# search first" even though you just ran one.
 LAST_RESULTS = []
 LAST_SEARCH_QUERY = ""
+RESULTS_FILE = os.path.join(BASE_DIR, "last_results.json")
+
+
+def _save_results():
+    """Persist LAST_RESULTS to disk. Call this right after any mutation."""
+    try:
+        tmp_path = RESULTS_FILE + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(LAST_RESULTS, f)
+        os.replace(tmp_path, RESULTS_FILE)  # atomic on POSIX
+    except OSError:
+        pass  # best-effort — worst case we fall back to in-memory-only
+
+
+def _load_results_if_empty():
+    """If this process's in-memory copy is empty, try to recover it from
+    disk before deciding there's really nothing to show. Cheap to call at
+    the top of any route that reads LAST_RESULTS."""
+    global LAST_RESULTS
+    if LAST_RESULTS:
+        return
+    try:
+        with open(RESULTS_FILE, "r", encoding="utf-8") as f:
+            LAST_RESULTS = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
 
 # In-memory store of the most recent email verification batch.
 LAST_VERIFY_RESULTS = []
@@ -436,6 +473,7 @@ def _run_search_job(keyword, location, limit, generation):
             return
 
     LAST_RESULTS = [r for r in rows if r is not None]
+    _save_results()
 
     with SEARCH_LOCK:
         if SEARCH_JOB["generation"] == generation:
@@ -482,6 +520,8 @@ def search_start():
 
 @app.route("/search/progress")
 def search_progress():
+    _load_results_if_empty()
+
     with SEARCH_LOCK:
         job = dict(SEARCH_JOB)
 
@@ -563,6 +603,7 @@ def _run_name_search_job(names, location_hint, max_candidates_per_name=3):
             NAME_SEARCH_JOB["not_found"] = list(not_found)
             NAME_SEARCH_JOB["last_update"] = time.time()
 
+        _save_results()
         time.sleep(0.1)
 
     with NAME_SEARCH_LOCK:
@@ -616,6 +657,8 @@ def search_by_name_start():
 
 @app.route("/search-by-name/progress")
 def search_by_name_progress():
+    _load_results_if_empty()
+
     with NAME_SEARCH_LOCK:
         job = dict(NAME_SEARCH_JOB)
 
@@ -647,6 +690,7 @@ def _run_scrape_job():
         row["all_emails"] = "; ".join(info["emails"])
         row["website_phone"] = info["phones"][0] if info["phones"] else ""
         row["scraped"] = True
+        _save_results()
 
         with SCRAPE_LOCK:
             SCRAPE_JOB["done"] += 1
@@ -662,6 +706,7 @@ def _run_scrape_job():
 
 @app.route("/scrape-emails/start", methods=["POST"])
 def scrape_emails_start():
+    _load_results_if_empty()
     if not LAST_RESULTS:
         return jsonify({"error": "No results yet — run a search first."}), 400
 
@@ -675,6 +720,8 @@ def scrape_emails_start():
 
 @app.route("/scrape-emails/progress")
 def scrape_emails_progress():
+    _load_results_if_empty()
+
     with SCRAPE_LOCK:
         job = dict(SCRAPE_JOB)
 
@@ -728,6 +775,7 @@ def _run_verify_job():
 
         row["email_verification"] = "; ".join(statuses)
         row["email_verified"] = True
+        _save_results()
 
     with VERIFY_LOCK:
         VERIFY_JOB["running"] = False
@@ -735,6 +783,7 @@ def _run_verify_job():
 
 @app.route("/verify-current/start", methods=["POST"])
 def verify_current_start():
+    _load_results_if_empty()
     if not LAST_RESULTS:
         return jsonify({"error": "No results yet — run a search first."}), 400
 
@@ -748,6 +797,8 @@ def verify_current_start():
 
 @app.route("/verify-current/progress")
 def verify_current_progress():
+    _load_results_if_empty()
+
     with VERIFY_LOCK:
         job = dict(VERIFY_JOB)
 
@@ -769,6 +820,7 @@ CSV_FIELDS = ["name", "phone", "website_phone", "address", "website", "email", "
 
 @app.route("/download-csv")
 def download_csv():
+    _load_results_if_empty()
     if not LAST_RESULTS:
         return "No results yet — run a search first.", 400
 
@@ -787,6 +839,7 @@ def download_csv():
 
 @app.route("/download-pdf")
 def download_pdf():
+    _load_results_if_empty()
     if not LAST_RESULTS:
         return "No results yet — run a search first.", 400
 
@@ -862,6 +915,7 @@ def download_pdf():
 
 @app.route("/download-docx")
 def download_docx():
+    _load_results_if_empty()
     if not LAST_RESULTS:
         return "No results yet — run a search first.", 400
 
