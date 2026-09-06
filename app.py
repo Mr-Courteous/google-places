@@ -74,26 +74,30 @@ RESULTS_FILE = os.path.join(BASE_DIR, "last_results.json")
 
 
 def _save_results():
-    """Persist LAST_RESULTS to disk. Call this right after any mutation."""
+    """Persist LAST_RESULTS (and the search query used to name downloads)
+    to disk. Call this right after any mutation of either."""
     try:
         tmp_path = RESULTS_FILE + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(LAST_RESULTS, f)
+            json.dump({"results": LAST_RESULTS, "query": LAST_SEARCH_QUERY}, f)
         os.replace(tmp_path, RESULTS_FILE)  # atomic on POSIX
     except OSError:
         pass  # best-effort — worst case we fall back to in-memory-only
 
 
 def _load_results_if_empty():
-    """If this process's in-memory copy is empty, try to recover it from
-    disk before deciding there's really nothing to show. Cheap to call at
-    the top of any route that reads LAST_RESULTS."""
-    global LAST_RESULTS
+    """If this process's in-memory copy is empty, try to recover it (and
+    the search query used for download filenames) from disk before
+    deciding there's really nothing to show. Cheap to call at the top of
+    any route that reads LAST_RESULTS."""
+    global LAST_RESULTS, LAST_SEARCH_QUERY
     if LAST_RESULTS:
         return
     try:
         with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-            LAST_RESULTS = json.load(f)
+            data = json.load(f)
+        LAST_RESULTS = data.get("results", [])
+        LAST_SEARCH_QUERY = data.get("query", "")
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
 
@@ -509,6 +513,7 @@ def search_start():
 
     global LAST_SEARCH_QUERY
     LAST_SEARCH_QUERY = f"{keyword} in {location}".strip()
+    _save_results()
 
     with SEARCH_LOCK:
         SEARCH_JOB["generation"] += 1
@@ -650,6 +655,7 @@ def search_by_name_start():
 
     global LAST_SEARCH_QUERY
     LAST_SEARCH_QUERY = f"{len(names)} companies" + (f" in {location_hint}" if location_hint else "")
+    _save_results()
 
     threading.Thread(target=_run_name_search_job, args=(names, location_hint), daemon=True).start()
     return jsonify({"started": True, "total": len(names)})
