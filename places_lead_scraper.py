@@ -49,15 +49,74 @@ DETAILS_FIELD_MASK = (
 )
 
 
-def search_places(query: str, max_results: int = 60):
-    """Text-search for a query (e.g. 'gyms in Kano') and return place IDs."""
+GEOCODE_FIELD_MASK = "places.location,places.viewport,places.formattedAddress"
+
+
+def _geocode_area(location):
+    """Resolve a typed location to a real geographic viewport via the
+    Places API, so the search can be geographically restricted instead of
+    relying on fuzzy text matching of 'keyword in <location>'."""
+    if not location:
+        return None
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": API_KEY,
+        "X-Goog-FieldMask": GEOCODE_FIELD_MASK,
+    }
+    body = {"textQuery": location, "pageSize": 1}
+    try:
+        resp = requests.post(TEXT_SEARCH_URL, headers=headers, json=body, timeout=15)
+        resp.raise_for_status()
+        places = resp.json().get("places", [])
+    except requests.exceptions.RequestException:
+        return None
+    if not places:
+        return None
+    place = places[0]
+    viewport = place.get("viewport")
+    if viewport and "low" in viewport and "high" in viewport:
+        return viewport
+    loc = place.get("location")
+    if not loc or loc.get("latitude") is None or loc.get("longitude") is None:
+        return None
+    lat, lng = loc["latitude"], loc["longitude"]
+    delta = 0.022
+    return {
+        "low": {"latitude": lat - delta, "longitude": lng - delta},
+        "high": {"latitude": lat + delta, "longitude": lng + delta},
+    }
+
+
+def _location_matches(address, location):
+    """Loosely check whether a place's formatted address actually falls
+    within the location typed (e.g. 'Ikeja'), rather than a nearby area
+    Google's fuzzy text search pulled in anyway (e.g. 'Oshodi'). Used only
+    as a fallback when geocoding the typed location fails."""
+    if not location:
+        return True
+    primary = location.split(",")[0].strip().lower()
+    if not primary:
+        return True
+    return primary in (address or "").lower()
+
+
+def search_places(query: str, max_results: int = 60, location: str = None):
+    """Text-search for a query (e.g. 'gyms in Kano') and return place IDs.
+
+    Note: Google's Places Text Search API caps out at 60 results (3 pages
+    of 20) per distinct query, no matter how high max_results is set — this
+    is a Google-side limit, not something this script controls.
+    """
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": API_KEY,
         "X-Goog-FieldMask": SEARCH_FIELD_MASK,
     }
     all_places = []
+    location_restriction = _geocode_area(location) if location else None
     body = {"textQuery": query, "pageSize": min(20, max_results)}
+    if location_restriction:
+        body["locationRestriction"] = {"rectangle": location_restriction}
     next_page_token = None
 
     while len(all_places) < max_results:
@@ -72,11 +131,15 @@ def search_places(query: str, max_results: int = 60):
             break
 
         data = resp.json()
-        places = data.get("places", [])
+        raw_places = data.get("places", [])
+        if location and not location_restriction:
+            places = [p for p in raw_places if _location_matches(p.get("formattedAddress", ""), location)]
+        else:
+            places = raw_places
         all_places.extend(places)
 
         next_page_token = data.get("nextPageToken")
-        if not next_page_token:
+        if not next_page_token or not raw_places:
             break
 
     return all_places[:max_results]
@@ -110,7 +173,7 @@ def main():
 
     query = f"{args.keyword} in {args.location}"
     print(f"Searching: {query}")
-    places = search_places(query, max_results=args.limit)
+    places = search_places(query, max_results=args.limit, location=args.location)
     print(f"Found {len(places)} places. Fetching details...")
 
     rows = []

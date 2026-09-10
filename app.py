@@ -183,14 +183,84 @@ def _google_error_message(resp):
         return f"Google API error {resp.status_code}: {resp.text}"
 
 
-def search_places(query, max_results=60, on_progress=None):
+GEOCODE_FIELD_MASK = "places.location,places.viewport,places.formattedAddress"
+
+
+def _geocode_area(location):
+    """Resolve a typed location (e.g. 'Ajah', 'Ikeja, Lagos') to a real
+    geographic viewport using the Places API itself.
+
+    This is the actual fix for 'searching Ajah still shows Ikota' style
+    results. Previously the location was only ever baked into the free-text
+    query ('software companies in Ajah'), and Google resolves that by
+    relevance, not by boundary — a business Google considers close enough
+    to Ajah gets included even if it's really in a neighboring area, and
+    its formattedAddress may even use the broader postal town name rather
+    than its actual neighborhood. Restricting the search to real
+    coordinates avoids both problems: it's a hard geographic filter Google
+    enforces server-side, not a best-effort text match.
+    """
+    if not location:
+        return None
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": API_KEY,
+        "X-Goog-FieldMask": GEOCODE_FIELD_MASK,
+    }
+    body = {"textQuery": location, "pageSize": 1}
+    try:
+        resp = requests.post(TEXT_SEARCH_URL, headers=headers, json=body,
+                              timeout=REQUEST_TIMEOUT, proxies=NO_PROXY)
+        resp.raise_for_status()
+        places = resp.json().get("places", [])
+    except requests.exceptions.RequestException:
+        return None
+    if not places:
+        return None
+
+    place = places[0]
+    viewport = place.get("viewport")
+    if viewport and "low" in viewport and "high" in viewport:
+        return viewport
+
+    # Very small/unofficial places sometimes come back without a viewport -
+    # fall back to a ~2.4km box centered on the point instead of giving up.
+    loc = place.get("location")
+    if not loc or loc.get("latitude") is None or loc.get("longitude") is None:
+        return None
+    lat, lng = loc["latitude"], loc["longitude"]
+    delta = 0.022
+    return {
+        "low": {"latitude": lat - delta, "longitude": lng - delta},
+        "high": {"latitude": lat + delta, "longitude": lng + delta},
+    }
+
+
+def _location_matches(address, location):
+    """Fallback text check, used only when geocoding the typed location
+    failed and there's no viewport to restrict by. Loosely checks whether a
+    place's formatted address mentions the location typed."""
+    if not location:
+        return True
+    primary = location.split(",")[0].strip().lower()
+    if not primary:
+        return True
+    return primary in (address or "").lower()
+
+
+def search_places(query, max_results=60, on_progress=None, location=None):
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": API_KEY,
         "X-Goog-FieldMask": SEARCH_FIELD_MASK,
     }
     all_places = []
+    dropped_for_location = 0
+
+    location_restriction = _geocode_area(location) if location else None
     body = {"textQuery": query, "pageSize": min(20, max_results)}
+    if location_restriction:
+        body["locationRestriction"] = {"rectangle": location_restriction}
     next_page_token = None
 
     # Hard safety cap on how many pages we'll ever request, regardless of
@@ -227,7 +297,17 @@ def search_places(query, max_results=60, on_progress=None):
             raise RuntimeError(_google_error_message(resp))
 
         data = resp.json()
-        places = data.get("places", [])
+        raw_places = data.get("places", [])
+
+        # locationRestriction already did the real geographic filtering
+        # server-side. Only fall back to the loose text-address check when
+        # we couldn't geocode the typed location at all.
+        if location and not location_restriction:
+            places = [p for p in raw_places if _location_matches(p.get("formattedAddress", ""), location)]
+            dropped_for_location += len(raw_places) - len(places)
+        else:
+            places = raw_places
+
         all_places.extend(places)
 
         if on_progress:
@@ -235,15 +315,25 @@ def search_places(query, max_results=60, on_progress=None):
 
         next_page_token = data.get("nextPageToken")
 
-        # Stop if there's no next page, OR if this page added nothing new.
-        # A page with a token but zero results means we've actually run out
-        # of real matches even though the API is still handing back a
-        # token — treating that as "more pages available" is what causes
-        # an endless request loop.
-        if not next_page_token or not places:
+        # Stop if there's no next page, OR if this page added nothing new
+        # *raw* results. A page with a token but zero raw results means
+        # we've actually run out of real matches even though the API is
+        # still handing back a token — treating that as "more pages
+        # available" is what causes an endless request loop. (We check the
+        # raw count here, not the post-filter count, since a page can be
+        # entirely filtered out by location and still not be the last page.)
+        if not next_page_token or not raw_places:
             break
 
     if not all_places:
+        if dropped_for_location:
+            raise RuntimeError(
+                f"Google found {dropped_for_location} result(s) for this query, but none of "
+                f"their addresses actually mention '{location.split(',')[0].strip()}' — they were "
+                f"all in nearby areas instead. Try a more specific location string (e.g. "
+                f"'Ikeja, Lagos' instead of just 'Lagos'), or widen the search if the strict "
+                f"area genuinely has few listings."
+            )
         raise RuntimeError(
             f"Google returned 0 results for this exact query. This isn't an error — "
             f"it means no businesses matched. Try a more specific or more common business "
@@ -435,7 +525,7 @@ def _run_search_job(keyword, location, limit, generation):
             SEARCH_JOB["last_update"] = time.time()
 
     try:
-        places = search_places(query, max_results=limit, on_progress=on_search_progress)
+        places = search_places(query, max_results=limit, on_progress=on_search_progress, location=location)
     except RuntimeError as e:
         with SEARCH_LOCK:
             if SEARCH_JOB["generation"] == generation:
